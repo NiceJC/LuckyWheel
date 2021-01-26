@@ -178,6 +178,11 @@ public class LuckyWheelView extends View  {
 
     }
 
+    public boolean getIsRolling(){
+        return  isRolling;
+    }
+
+
 
     private void initPaint() {
 
