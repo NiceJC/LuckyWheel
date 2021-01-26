@@ -7,4 +7,4 @@
 
 ![image](https://github.com/NiceJC/LuckyWheel/blob/master/Screenshot_2021-01-26-16-10-32-782_com.jc.luckwhe.png)
 
-按住蓄力   xiu ~ ~ ~
+按住蓄力--松手   xiu ~ ~ ~
