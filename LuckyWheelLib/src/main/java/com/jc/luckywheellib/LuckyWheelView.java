@@ -1,5 +1,6 @@
 package com.jc.luckywheellib;
 
+import android.app.AlertDialog;
 import android.content.Context;
 import android.graphics.Bitmap;
 import android.graphics.BitmapFactory;
@@ -58,13 +59,18 @@ public class LuckyWheelView extends View  {
     //当前的旋转角度
     private float currentRotateAngle = 0;
     //画扇形时的起始角度
-    private int currentStartAngle = 0;
+    private float currentStartAngle = 0;
     private RectF pieReact;
 
     private Bitmap backgroundPic;//背景图
     private Bitmap pointerPic;//指针图
     private Paint piePaint;
     private Paint textPaint;
+    private WheelListener wheelListener;
+
+    public void setWheelListener(WheelListener wheelListener) {
+        this.wheelListener = wheelListener;
+    }
 
     public LuckyWheelView(Context context) {
         this(context, null);
@@ -87,7 +93,7 @@ public class LuckyWheelView extends View  {
     //总共有多少分奖品（或者有多少人参与抽奖）
     int sumCount;
     //每一份对应的角度
-    int pieceAngle;
+    float pieceAngle;
 
     public void setTypeList(List<GiftType> gifts) {
 
@@ -96,14 +102,10 @@ public class LuckyWheelView extends View  {
         }
         pieList.clear();
 
-        sumCount = 0;
-
         for (int i = 0; i <gifts.size() ; i++) {
-            sumCount = sumCount + gifts.get(i).getCount();
             gifts.get(i).setColor(colors[i % 6]);
         }
 
-        pieceAngle = 360 / sumCount;
 
         //逐一设置颜色  角度
         for (GiftType type : gifts
@@ -120,6 +122,7 @@ public class LuckyWheelView extends View  {
                 }
             }
         }
+        updatePieAngle();
         //打乱顺序
         Collections.shuffle(pieList);
         postInvalidate();
@@ -157,17 +160,64 @@ public class LuckyWheelView extends View  {
 
                 if(currentSpeed<=0){
                     timer.cancel();
+                    timerTask.cancel();
                     isRolling=false;
+                    catchPie();
+
+                }else{
+                    currentRotateAngle=currentRotateAngle+(float)currentSpeed/1000*15;
+                    currentSpeed--;
+                    postInvalidate();
                 }
-                currentRotateAngle=currentRotateAngle+(float)currentSpeed/1000*15;
-                currentSpeed--;
-                postInvalidate();
+
             }
         };
         timer=new Timer();
         timer.schedule(timerTask,15,15);
 
 
+    }
+
+    public void updatePieAngle(){
+        sumCount=0;
+        for (GiftPie pie:pieList
+             ) {
+            if(!pie.isCatch()){
+                sumCount++;
+            }
+        }
+        pieceAngle=(float) 360/sumCount;
+        postInvalidate();
+    }
+    public void resetPiePool(){
+        for (GiftPie pie:pieList
+        ) {
+
+            pie.setCatch(false);
+        }
+        updatePieAngle();
+    }
+
+
+    private void catchPie(){
+
+        double targetAngle=(270-currentRotateAngle)%360;
+        if(targetAngle<0){
+            targetAngle=targetAngle+360;
+        }
+        int catchPosition= (int) Math.floor(targetAngle/pieceAngle);
+
+        List<GiftPie> unCatchPieList=new ArrayList<>();
+        for (GiftPie pie:pieList
+             ) {
+            if(!pie.isCatch()){
+                unCatchPieList.add(pie);
+            }
+        }
+
+
+        GiftPie targetPie=unCatchPieList.get(catchPosition);
+        wheelListener.onCatch(targetPie.getName(),targetPie);
     }
 
     private void initParam() {
@@ -242,6 +292,10 @@ public class LuckyWheelView extends View  {
         currentStartAngle=0;
         for (GiftPie bean : pieList
         ) {
+            if(bean.isCatch()){
+                //抽中过的就不画了
+                continue;
+            }
             piePaint.setColor(bean.getColor());
             canvas.drawArc(pieReact,currentStartAngle+currentRotateAngle,pieceAngle,true,piePaint);
 

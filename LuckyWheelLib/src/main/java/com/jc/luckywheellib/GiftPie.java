@@ -14,10 +14,21 @@ public class GiftPie {
     private String ownerName;
     private boolean isOrdinary =false;
 
+    //是否已经被抽中
+    private boolean isCatch=false;
+
     public GiftPie(int color, String name, boolean isOrdinary) {
         this.color = color;
         this.name = name;
         this.isOrdinary = isOrdinary;
+    }
+
+    public boolean isCatch() {
+        return isCatch;
+    }
+
+    public void setCatch(boolean aCatch) {
+        isCatch = aCatch;
     }
 
     public boolean isOrdinary() {
