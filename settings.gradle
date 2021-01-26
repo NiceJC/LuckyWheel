@@ -1,0 +1,3 @@
+include ':LuckyWheelLib'
+include ':app'
+rootProject.name = "LuckWheel"
