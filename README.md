@@ -10,3 +10,5 @@
 按住蓄力--松手   xiu ~ ~ ~
  
 ## 后续有人问再优化 没人就算了~
+# apk文件在这里
+https://github.com/NiceJC/LuckyWheel/blob/master/luckywheel.apk
