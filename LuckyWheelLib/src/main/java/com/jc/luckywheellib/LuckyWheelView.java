@@ -5,6 +5,7 @@ import android.content.Context;
 import android.graphics.Bitmap;
 import android.graphics.BitmapFactory;
 import android.graphics.Canvas;
+import android.graphics.Color;
 import android.graphics.Matrix;
 import android.graphics.Paint;
 import android.graphics.Path;
@@ -271,6 +272,9 @@ public class LuckyWheelView extends SurfaceView implements SurfaceHolder.Callbac
 
     //绘制背景
     private void drawBackground(Canvas canvas) {
+
+
+        canvas.drawColor(Color.WHITE);
 
         //将原点挪到 最大正方形左上角
         //将原点挪到
