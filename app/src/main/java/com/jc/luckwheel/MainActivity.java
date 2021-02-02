@@ -47,6 +47,7 @@ public class MainActivity extends AppCompatActivity {
 
     private void initEvent(){
 
+
         luckyWheelView.setWheelListener(new WheelListener() {
             @Override
             public void onStartRolling() {

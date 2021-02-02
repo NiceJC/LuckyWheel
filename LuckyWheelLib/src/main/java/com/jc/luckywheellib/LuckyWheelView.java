@@ -9,10 +9,15 @@ import android.graphics.Matrix;
 import android.graphics.Paint;
 import android.graphics.Path;
 import android.graphics.RectF;
+import android.os.Handler;
 import android.util.AttributeSet;
+import android.util.Log;
+import android.view.SurfaceHolder;
+import android.view.SurfaceView;
 import android.view.View;
 import android.widget.Toast;
 
+import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
 
 import java.util.ArrayList;
@@ -28,15 +33,19 @@ import java.util.TimerTask;
  * <p>
  * 抽奖的结果 其实取决于传入的抽奖参数power
  */
-public class LuckyWheelView extends View  {
+public class LuckyWheelView extends SurfaceView implements SurfaceHolder.Callback, Runnable {
 
     private List<GiftPie> pieList = new ArrayList<>();//抽奖扇形
-    public static final int POWER_MAX=500;
-    public static final int POWER_MIN=100;
+    public static final int POWER_MAX = 500;
+    public static final int POWER_MIN = 100;
 
 
-    private TimerTask timerTask;
-    private Timer timer;
+    private SurfaceHolder surfaceHolder;
+    private Thread thread;
+    private Canvas canvas;
+    private boolean isRunning;
+
+
     private int currentSpeed;
 
     //描述字体大小（px）
@@ -102,7 +111,7 @@ public class LuckyWheelView extends View  {
         }
         pieList.clear();
 
-        for (int i = 0; i <gifts.size() ; i++) {
+        for (int i = 0; i < gifts.size(); i++) {
             gifts.get(i).setColor(colors[i % 6]);
         }
 
@@ -115,25 +124,25 @@ public class LuckyWheelView extends View  {
                 if (type.isWorst()) {
                     //阳光普照奖
                     pieList.add(new GiftPie(getResources().getColor(R.color.color0)
-                            , type.getName(),true));
+                            , type.getName(), true));
                 } else {
                     //其他奖
-                    pieList.add(new GiftPie(type.getColor(), type.getName(),false));
+                    pieList.add(new GiftPie(type.getColor(), type.getName(), false));
                 }
             }
         }
         updatePieAngle();
         //打乱顺序
         Collections.shuffle(pieList);
-        postInvalidate();
+        draw();
 
     }
 
     /**
      * 开始转盘抽奖
      * power的值即为初始角速度
-     *
-     *
+     * <p>
+     * <p>
      * 方便起见 加速度为每一帧(15ms)减少1
      * 估算  300来算 大概5秒停下
      */
@@ -145,52 +154,32 @@ public class LuckyWheelView extends View  {
         if (isRolling) {
             return;
         }
-        if(power<POWER_MIN||power>POWER_MAX){
+        if (power < POWER_MIN || power > POWER_MAX) {
             Toast.makeText(mContext, "力度不行啊", Toast.LENGTH_SHORT).show();
             return;
         }
         isRolling = true;
 
-        currentRotateAngle=0;
-        currentSpeed=power;
-        timerTask=new TimerTask() {
-            @Override
-            public void run() {
-
-
-                if(currentSpeed<=0){
-                    timer.cancel();
-                    timerTask.cancel();
-                    isRolling=false;
-                    catchPie();
-
-                }else{
-                    currentRotateAngle=currentRotateAngle+(float)currentSpeed/1000*15;
-                    currentSpeed--;
-                    postInvalidate();
-                }
-
-            }
-        };
-        timer=new Timer();
-        timer.schedule(timerTask,15,15);
+        currentRotateAngle = 0;
+        currentSpeed = power;
 
 
     }
 
-    public void updatePieAngle(){
-        sumCount=0;
-        for (GiftPie pie:pieList
-             ) {
-            if(!pie.isCatch()){
+    public void updatePieAngle() {
+        sumCount = 0;
+        for (GiftPie pie : pieList
+        ) {
+            if (!pie.isCatch()) {
                 sumCount++;
             }
         }
-        pieceAngle=(float) 360/sumCount;
-        postInvalidate();
+        pieceAngle = (float) 360 / sumCount;
+        draw();
     }
-    public void resetPiePool(){
-        for (GiftPie pie:pieList
+
+    public void resetPiePool() {
+        for (GiftPie pie : pieList
         ) {
 
             pie.setCatch(false);
@@ -199,73 +188,85 @@ public class LuckyWheelView extends View  {
     }
 
 
-    private void catchPie(){
+    private void catchPie() {
 
-        double targetAngle=(270-currentRotateAngle)%360;
-        if(targetAngle<0){
-            targetAngle=targetAngle+360;
+        double targetAngle = (270 - currentRotateAngle) % 360;
+        if (targetAngle < 0) {
+            targetAngle = targetAngle + 360;
         }
-        int catchPosition= (int) Math.floor(targetAngle/pieceAngle);
+        int catchPosition = (int) Math.floor(targetAngle / pieceAngle);
 
-        List<GiftPie> unCatchPieList=new ArrayList<>();
-        for (GiftPie pie:pieList
-             ) {
-            if(!pie.isCatch()){
+        List<GiftPie> unCatchPieList = new ArrayList<>();
+        for (GiftPie pie : pieList
+        ) {
+            if (!pie.isCatch()) {
                 unCatchPieList.add(pie);
             }
         }
 
 
-        GiftPie targetPie=unCatchPieList.get(catchPosition);
-        wheelListener.onCatch(targetPie.getName(),targetPie);
+        GiftPie targetPie = unCatchPieList.get(catchPosition);
+        wheelListener.onCatch(targetPie.getName(), targetPie);
     }
 
     private void initParam() {
 
         backgroundPic = BitmapFactory.decodeResource(mContext.getResources(), R.mipmap.back);
         pointerPic = BitmapFactory.decodeResource(mContext.getResources(), R.mipmap.node);
+//设置可获得焦点
+        setFocusable(true);
+        setFocusableInTouchMode(true);
+
+        surfaceHolder = getHolder();
+        surfaceHolder.addCallback(this);
 
 
     }
 
-    public boolean getIsRolling(){
-        return  isRolling;
+    public boolean getIsRolling() {
+        return isRolling;
     }
-
 
 
     private void initPaint() {
 
-        piePaint=new Paint();
+        piePaint = new Paint();
         piePaint.setAntiAlias(true);
         piePaint.setStyle(Paint.Style.FILL);
 
-        textPaint=new Paint();
+        textPaint = new Paint();
         textPaint.setAntiAlias(true);
         textPaint.setStyle(Paint.Style.FILL);
         textPaint.setColor(0xffffffff);
-        textSize=dip2px(mContext,12);
+        textSize = dip2px(mContext, 12);
         textPaint.setTextSize(textSize);
 
     }
 
     float pieRadium;
+
     @Override
     protected void onSizeChanged(int w, int h, int oldw, int oldh) {
         super.onSizeChanged(w, h, oldw, oldh);
         mWidth = w;
         mHeight = h;
         mUseWidth = Math.min(mWidth, mHeight);
-        pieRadium=(float) mUseWidth *2/5;
+        pieRadium = (float) mUseWidth * 2 / 5;
         pieReact = new RectF(-pieRadium, -pieRadium, pieRadium, pieRadium);
     }
 
-    @Override
-    public void draw(Canvas canvas) {
-        super.draw(canvas);
-        drawBackground(canvas);
-        drawPies(canvas);
-        drawPointer(canvas);
+    private void draw() {
+        try {
+            canvas = surfaceHolder.lockCanvas();
+            drawBackground(canvas);
+            drawPies(canvas);
+            drawPointer(canvas);
+        } catch (Exception e) {
+        } finally {
+            if (canvas != null) {
+                surfaceHolder.unlockCanvasAndPost(canvas);
+            }
+        }
     }
 
     //绘制背景
@@ -289,31 +290,33 @@ public class LuckyWheelView extends View  {
         //坐标移到正中心
         canvas.translate((float) mUseWidth / 2, (float) mUseWidth / 2);
 
-        currentStartAngle=0;
+        currentStartAngle = 0;
         for (GiftPie bean : pieList
         ) {
-            if(bean.isCatch()){
+            if (bean.isCatch()) {
                 //抽中过的就不画了
                 continue;
             }
             piePaint.setColor(bean.getColor());
-            canvas.drawArc(pieReact,currentStartAngle+currentRotateAngle,pieceAngle,true,piePaint);
+            canvas.drawArc(pieReact, currentStartAngle + currentRotateAngle, pieceAngle, true, piePaint);
 
-            if(!bean.isOrdinary()){
-                Path path=new Path();
-                path.lineTo( pieRadium*(float)Math.cos(Math.PI* (currentStartAngle+currentRotateAngle+(float)pieceAngle/2)/180),pieRadium*(float)Math.sin(Math.PI*  (currentStartAngle+currentRotateAngle+(float)pieceAngle/2)/180));
-                canvas.drawTextOnPath(bean.getName(),path,pieRadium*2/3,(float) textSize/2,textPaint);
+            if (!bean.isOrdinary()) {
+                Path path = new Path();
+                path.lineTo(pieRadium * (float) Math.cos(Math.PI * (currentStartAngle + currentRotateAngle + (float) pieceAngle / 2) / 180), pieRadium * (float) Math.sin(Math.PI * (currentStartAngle + currentRotateAngle + (float) pieceAngle / 2) / 180));
+                canvas.drawTextOnPath(bean.getName(), path, pieRadium * 2 / 3, (float) textSize / 2, textPaint);
             }
-            currentStartAngle=currentStartAngle+pieceAngle;
+            currentStartAngle = currentStartAngle + pieceAngle;
 
         }
     }
-    private void drawPointer(Canvas canvas){
+
+    private void drawPointer(Canvas canvas) {
         Matrix matrix = new Matrix();
-        matrix.postTranslate(-(float)pointerPic.getWidth()/2,-(float)pointerPic.getHeight()/2);
+        matrix.postTranslate(-(float) pointerPic.getWidth() / 2, -(float) pointerPic.getHeight() / 2);
         canvas.drawBitmap(pointerPic, matrix, null);
 
     }
+
     public static int dip2px(Context context, float dipValue) {
         float scale = context.getResources().getDisplayMetrics().density;
         return (int) (dipValue * scale + 0.5f);
@@ -322,5 +325,59 @@ public class LuckyWheelView extends View  {
     public static int px2dip(Context context, float pxValue) {
         float scale = context.getResources().getDisplayMetrics().density;
         return (int) (pxValue / scale + 0.5f);
+    }
+
+    @Override
+    public void surfaceCreated(@NonNull SurfaceHolder holder) {
+        isRunning = true;
+        thread = new Thread(this);
+        thread.start();
+        draw();
+
+    }
+
+    @Override
+    public void surfaceChanged(@NonNull SurfaceHolder holder, int format, int width, int height) {
+
+    }
+
+    @Override
+    public void surfaceDestroyed(@NonNull SurfaceHolder holder) {
+
+        isRunning = false;
+
+    }
+
+    @Override
+    public void run() {
+        while (isRunning) {
+
+
+            long start = System.currentTimeMillis();
+
+            if (isRolling) {
+                if (currentSpeed <= 0) {
+                    isRolling = false;
+                    catchPie();
+
+                } else {
+                    currentRotateAngle = currentRotateAngle + (float) currentSpeed / 1000 * 15;
+                    currentSpeed--;
+
+                    draw();
+                }
+            }
+
+            long end = System.currentTimeMillis();
+
+            try {
+                if (end - start < 15) {
+                    Thread.sleep(15 - (end - start));
+                }
+            } catch (InterruptedException e) {
+                e.printStackTrace();
+            }
+        }
+
     }
 }
